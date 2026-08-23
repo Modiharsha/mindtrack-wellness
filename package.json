@@ -11,8 +11,7 @@
     "start": "cd server && npx tsx src/index.ts",
     "db:push": "npm run db:push --prefix server",
     "db:seed": "npm run db:seed --prefix server",
-    "test": "npm run test --prefix server",
-    "postinstall": "cd server && npx prisma generate"
+    "test": "npm run test --prefix server"
   },
   "engines": {
     "node": ">=18.0.0"

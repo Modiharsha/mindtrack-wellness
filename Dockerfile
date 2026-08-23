@@ -1,25 +1,17 @@
-FROM node:20-alpine AS builder
+FROM node:20-slim
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-COPY server/package*.json ./server/
-COPY client/package*.json ./client/
+# Install OpenSSL for Prisma engine compatibility
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
-RUN npm install
-RUN cd server && npm install
-RUN cd client && npm install
-
-# Copy source code
+# Copy all source files
 COPY . .
 
-# Generate Prisma and push DB seed
-RUN cd server && npx prisma generate && npx prisma db push --accept-data-loss && npx tsx prisma/seed.ts
-
-# Build frontend client
-RUN cd client && npm run build
+# Install dependencies and build client & database
+RUN npm install --ignore-scripts
+RUN cd server && npm install && npx prisma generate && npx prisma db push --accept-data-loss && npx tsx prisma/seed.ts
+RUN cd client && npm install && npm run build
 
 EXPOSE 5000
 
