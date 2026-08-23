@@ -1,0 +1,247 @@
+// MindTrack Prisma Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  COUNSELOR
+  ADMIN
+}
+
+enum RiskLevel {
+  LOW
+  MODERATE
+  NEEDS_ATTENTION
+}
+
+enum WellnessCategory {
+  GENERAL
+  ACADEMIC
+  SLEEP
+  EMOTIONAL
+  PHYSICAL
+  SOCIAL
+}
+
+enum AppointmentStatus {
+  REQUESTED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id           String    @id @default(uuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         String    @default("STUDENT") // STUDENT, COUNSELOR, ADMIN
+  isApproved   Boolean   @default(true) // Set to false for staff if requiring approval
+  avatar       String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  studentProfile   StudentProfile?
+  counselorProfile CounselorProfile?
+  
+  sentMessages     Message[]         @relation("SentMessages")
+  receivedMessages Message[]         @relation("ReceivedMessages")
+  notifications    Notification[]
+  counselorNotes   CounselorNote[]   @relation("AuthoredNotes")
+  feedbacks        Feedback[]
+}
+
+model StudentProfile {
+  id                  String    @id @default(uuid())
+  userId              String    @unique
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedCounselorId String?
+  counselor           CounselorProfile? @relation(fields: [assignedCounselorId], references: [id])
+  
+  program             String    @default("General Studies")
+  graduationYear      Int       @default(2027)
+  studentIdNumber     String?
+  consentGiven        Boolean   @default(false)
+  consentDate         DateTime?
+
+  moodEntries         MoodEntry[]
+  surveyResponses     SurveyResponse[]
+  riskAssessments     RiskAssessment[]
+  appointments        Appointment[]
+  counselorNotes      CounselorNote[]
+  
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model CounselorProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  department  String   @default("Student Wellness Center")
+  title       String   @default("Mental Health Counselor")
+  bio         String?
+  officeHours String?  @default("Mon-Fri, 9am-5pm")
+  contactEmail String?
+  maxCaseload Int      @default(30)
+
+  assignedStudents StudentProfile[]
+  appointments     Appointment[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CounselorNote {
+  id          String         @id @default(uuid())
+  counselorId String
+  studentId   String
+  noteContent String
+  isPrivate   Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  counselor   User           @relation("AuthoredNotes", fields: [counselorId], references: [id], onDelete: Cascade)
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model Survey {
+  id          String           @id @default(uuid())
+  slug        String           @unique
+  title       String
+  description String
+  category    String           @default("GENERAL") // GENERAL, ACADEMIC, SLEEP, EMOTIONAL, PHYSICAL
+  estimatedMinutes Int         @default(5)
+  questions   String           // JSON structured array of questions
+  scoringRules String?         // JSON structured scoring thresholds
+  active      Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  responses   SurveyResponse[]
+}
+
+model SurveyResponse {
+  id          String         @id @default(uuid())
+  surveyId    String
+  survey      Survey         @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  studentId   String
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  answers     String         // JSON dictionary of questionId -> value
+  score       Float          @default(0)
+  riskLevel   String         @default("LOW") // LOW, MODERATE, NEEDS_ATTENTION
+  summary     String?
+  isDraft     Boolean        @default(false)
+  submittedAt DateTime       @default(now())
+  createdAt   DateTime       @default(now())
+}
+
+model MoodEntry {
+  id          String         @id @default(uuid())
+  studentId   String
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  moodValue   Int            // 1 (Very low / Struggling) to 5 (Great / Thriving)
+  emotionTags String?        // JSON array of strings e.g. ["Anxious", "Exhausted"]
+  note        String?
+  entryDate   String         // YYYY-MM-DD for fast streak & calendar heatmap lookup
+  createdAt   DateTime       @default(now())
+
+  @@unique([studentId, entryDate])
+}
+
+model RiskAssessment {
+  id                 String         @id @default(uuid())
+  studentId          String
+  student            StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  riskLevel          String         @default("LOW") // LOW, MODERATE, NEEDS_ATTENTION
+  compositeScore     Float          @default(0)     // 0-100 score
+  primaryCategory    String         @default("GENERAL") // ACADEMIC, SLEEP, EMOTIONAL, PHYSICAL
+  contributingFactors String        // JSON array of trigger reasons
+  triggerSource      String         @default("AUTOMATED_CHECK") // SURVEY, MOOD_STREAK, MANUAL, COMPOSITE
+  isResolved         Boolean        @default(false)
+  resolvedAt         DateTime?
+  generatedAt        DateTime       @default(now())
+}
+
+model Recommendation {
+  id           String   @id @default(uuid())
+  category     String   @default("GENERAL") // ACADEMIC, SLEEP, EMOTIONAL, PHYSICAL, CRISIS
+  title        String
+  summary      String
+  content      String
+  resourceLink String?
+  iconType     String   @default("heart") // heart, brain, moon, book, activity, phone
+  urgencyLevel String   @default("GENERAL") // GENERAL, RECOMMENDED, URGENT
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Message {
+  id         String    @id @default(uuid())
+  senderId   String
+  receiverId String
+  content    String
+  sentAt     DateTime  @default(now())
+  readAt     DateTime?
+
+  sender     User      @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver   User      @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+}
+
+model Appointment {
+  id             String            @id @default(uuid())
+  studentId      String
+  counselorId    String
+  status         String            @default("REQUESTED") // REQUESTED, CONFIRMED, COMPLETED, CANCELLED
+  requestedSlot  String            // Human-readable or ISO slot
+  scheduledAt    DateTime?
+  studentNotes   String?
+  counselorNotes String?
+  meetingLink    String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  student        StudentProfile    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  counselor      CounselorProfile  @relation(fields: [counselorId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   @default("INFO") // ALERT, APPOINTMENT, MESSAGE, SURVEY_REMINDER, RESOURCE
+  linkUrl   String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Feedback {
+  id          String   @id @default(uuid())
+  userId      String?
+  userName    String?
+  userEmail   String?
+  userRole    String?  @default("STUDENT")
+  rating      Int      @default(5) // 1 to 5 stars
+  category    String   @default("GENERAL") // APP_USABILITY, COUNSELOR_SUPPORT, SURVEY_EXPERIENCE, RESOURCE_RELEVANCE, SUGGESTION, GENERAL
+  comment     String
+  isAnonymous Boolean  @default(false)
+  status      String   @default("NEW") // NEW, REVIEWED, ACTIONED
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
