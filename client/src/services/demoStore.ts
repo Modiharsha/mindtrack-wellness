@@ -1,10 +1,10 @@
-// Complete in-browser client store with pre-seeded demo data
-// Ensures the entire web app works 100% smoothly on Vercel without requiring an active backend connection.
+// Complete in-browser client store for real user authentication and persistent student accounts.
 
 export interface DemoUser {
   id: string;
   name: string;
   email: string;
+  password?: string;
   role: 'STUDENT' | 'COUNSELOR' | 'ADMIN';
   isApproved: boolean;
   avatar?: string;
@@ -35,6 +35,7 @@ const INITIAL_USERS: DemoUser[] = [
     id: 'user-admin-1',
     name: 'Dean Eleanor Vance',
     email: 'admin@mindtrack.edu',
+    password: 'Password@123',
     role: 'ADMIN',
     isApproved: true,
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
@@ -43,6 +44,7 @@ const INITIAL_USERS: DemoUser[] = [
     id: 'user-counselor-1',
     name: 'Dr. Sarah Chen, Ph.D.',
     email: 'dr.sarah@mindtrack.edu',
+    password: 'Password@123',
     role: 'COUNSELOR',
     isApproved: true,
     avatar: 'https://images.unsplash.com/photo-1594824813633-4f934273297a?w=150&auto=format&fit=crop&q=80',
@@ -56,25 +58,10 @@ const INITIAL_USERS: DemoUser[] = [
     },
   },
   {
-    id: 'user-counselor-2',
-    name: 'Dr. Marcus Vance, LCSW',
-    email: 'dr.marcus@mindtrack.edu',
-    role: 'COUNSELOR',
-    isApproved: true,
-    avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=150&auto=format&fit=crop&q=80',
-    counselorProfile: {
-      id: 'counselor-prof-2',
-      department: 'Academic Resilience & Counseling Center',
-      title: 'Senior Counselor & Burnout Specialist',
-      bio: 'Focused on high-achievement stress, perfectionism, first-generation college navigation, and sleep optimization.',
-      officeHours: 'Tue-Fri, 10:00 AM - 5:00 PM (Student Center 114)',
-      contactEmail: 'dr.marcus@mindtrack.edu',
-    },
-  },
-  {
     id: 'user-student-1',
     name: 'Alex Rivera',
     email: 'alex.rivera@mindtrack.edu',
+    password: 'Password@123',
     role: 'STUDENT',
     isApproved: true,
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
@@ -88,46 +75,6 @@ const INITIAL_USERS: DemoUser[] = [
         user: { name: 'Dr. Sarah Chen, Ph.D.', email: 'dr.sarah@mindtrack.edu' },
         title: 'Clinical Director & Lead Counselor',
         officeHours: 'Mon-Thu, 9:00 AM - 4:30 PM (Wellness Hall 302)',
-      },
-    },
-  },
-  {
-    id: 'user-student-2',
-    name: 'Maya Patel',
-    email: 'maya.patel@mindtrack.edu',
-    role: 'STUDENT',
-    isApproved: true,
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
-    studentProfile: {
-      id: 'student-prof-2',
-      program: 'B.S. Molecular Biology',
-      graduationYear: 2027,
-      assignedCounselorId: 'counselor-prof-1',
-      consentGiven: true,
-      assignedCounselor: {
-        user: { name: 'Dr. Sarah Chen, Ph.D.', email: 'dr.sarah@mindtrack.edu' },
-        title: 'Clinical Director & Lead Counselor',
-        officeHours: 'Mon-Thu, 9:00 AM - 4:30 PM (Wellness Hall 302)',
-      },
-    },
-  },
-  {
-    id: 'user-student-3',
-    name: 'Jordan Lee',
-    email: 'jordan.lee@mindtrack.edu',
-    role: 'STUDENT',
-    isApproved: true,
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    studentProfile: {
-      id: 'student-prof-3',
-      program: 'B.A. Psychology',
-      graduationYear: 2025,
-      assignedCounselorId: 'counselor-prof-2',
-      consentGiven: true,
-      assignedCounselor: {
-        user: { name: 'Dr. Marcus Vance, LCSW', email: 'dr.marcus@mindtrack.edu' },
-        title: 'Senior Counselor & Burnout Specialist',
-        officeHours: 'Tue-Fri, 10:00 AM - 5:00 PM (Student Center 114)',
       },
     },
   },
@@ -450,67 +397,24 @@ export const INITIAL_RECOMMENDATIONS = [
   },
 ];
 
-// In-Memory / LocalStorage State Store
 class DemoStore {
   private users: DemoUser[];
-  private currentUserEmail: string = 'alex.rivera@mindtrack.edu';
+  private currentUserEmail: string = '';
   private moodEntries: any[];
   private surveyResponses: any[];
   private appointments: any[];
   private messages: any[];
   private counselorNotes: any[];
-  private feedbackList: any[];
 
   constructor() {
-    const storedUsers = localStorage.getItem('demo_users');
+    const storedUsers = localStorage.getItem('mindtrack_users');
     this.users = storedUsers ? JSON.parse(storedUsers) : INITIAL_USERS;
 
-    const today = new Date();
-    const getDateOffset = (offsetDays: number): string => {
-      const d = new Date(today);
-      d.setDate(d.getDate() - offsetDays);
-      return d.toISOString().split('T')[0];
-    };
+    const storedMoods = localStorage.getItem('mindtrack_moods');
+    this.moodEntries = storedMoods ? JSON.parse(storedMoods) : [];
 
-    const alexMoods = [
-      { offset: 14, val: 2, tags: ['Stressed', 'Exam'], note: 'Algorithms midterm coming up' },
-      { offset: 13, val: 3, tags: ['Tired'], note: '' },
-      { offset: 12, val: 2, tags: ['Overwhelmed'], note: 'So many deadlines' },
-      { offset: 11, val: 3, tags: ['Fine'], note: '' },
-      { offset: 10, val: 2, tags: ['Exhausted'], note: 'Up until 3am' },
-      { offset: 9, val: 3, tags: ['Tired'], note: '' },
-      { offset: 8, val: 2, tags: ['Anxious'], note: 'Struggling with code bug' },
-      { offset: 7, val: 2, tags: ['Stressed'], note: '' },
-      { offset: 6, val: 3, tags: ['Fine'], note: 'Weekend break' },
-      { offset: 5, val: 2, tags: ['Overwhelmed'], note: 'Heavy workload ahead' },
-      { offset: 4, val: 1, tags: ['Overwhelmed', 'Panic'], note: 'Failed practice test, feel lost' },
-      { offset: 3, val: 1, tags: ['Exhausted', 'Hopeless'], note: 'Could not sleep at all' },
-      { offset: 2, val: 2, tags: ['Overwhelmed'], note: 'Hard to concentrate' },
-      { offset: 1, val: 1, tags: ['Exhausted', 'Can\'t sleep'], note: 'Need to talk to someone' },
-      { offset: 0, val: 2, tags: ['Anxious', 'Tired'], note: 'Checking resources today' },
-    ].map((m, idx) => ({
-      id: `mood-${idx}`,
-      studentId: 'student-prof-1',
-      moodValue: m.val,
-      emotionTags: m.tags,
-      note: m.note,
-      entryDate: getDateOffset(m.offset),
-      createdAt: new Date().toISOString(),
-    }));
-
-    this.moodEntries = alexMoods;
-    this.surveyResponses = [
-      {
-        id: 'resp-1',
-        surveyId: 'survey-2',
-        studentId: 'student-prof-1',
-        score: 13,
-        riskLevel: 'NEEDS_ATTENTION',
-        summary: 'Elevated academic stress indicators detected. Support check-in recommended.',
-        submittedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        survey: INITIAL_SURVEYS[1],
-      },
-    ];
+    const storedSurveys = localStorage.getItem('mindtrack_survey_responses');
+    this.surveyResponses = storedSurveys ? JSON.parse(storedSurveys) : [];
 
     this.appointments = [
       {
@@ -523,89 +427,57 @@ class DemoStore {
         studentNotes: 'Feeling really overwhelmed about algorithms project and midterm schedule.',
         counselorNotes: 'Confirmed 2:30 PM in Wellness Hall 302 or virtual link.',
         meetingLink: 'https://meet.mindtrack.edu/room/counselor-sarah-alex',
-        student: { user: { name: 'Alex Rivera', email: 'alex.rivera@mindtrack.edu', avatar: INITIAL_USERS[3].avatar } },
+        student: { user: { name: 'Alex Rivera', email: 'alex.rivera@mindtrack.edu', avatar: INITIAL_USERS[2].avatar } },
         counselor: { user: { name: 'Dr. Sarah Chen, Ph.D.', email: 'dr.sarah@mindtrack.edu' }, title: 'Clinical Director' },
       },
     ];
 
-    this.messages = [
-      {
-        id: 'msg-1',
-        senderId: 'user-student-1',
-        receiverId: 'user-counselor-1',
-        content: 'Hi Dr. Chen, I noticed the app flagged that my stress levels have been high. I am feeling pretty swamped with my coding projects this week.',
-        sentAt: new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString(),
-        sender: INITIAL_USERS[3],
-        receiver: INITIAL_USERS[1],
-      },
-      {
-        id: 'msg-2',
-        senderId: 'user-counselor-1',
-        receiverId: 'user-student-1',
-        content: 'Hi Alex, thank you for reaching out. Junior year CS is notoriously intense, and it is completely normal to feel stretched thin. Let’s do a quick 20-minute chat to break things down into manageable pieces. I approved your slot for tomorrow at 2:30 PM!',
-        sentAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-        sender: INITIAL_USERS[1],
-        receiver: INITIAL_USERS[3],
-      },
-      {
-        id: 'msg-3',
-        senderId: 'user-student-1',
-        receiverId: 'user-counselor-1',
-        content: 'Thank you so much Dr. Chen! That really takes a weight off my chest. I will see you tomorrow at 2:30 PM.',
-        sentAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-        sender: INITIAL_USERS[3],
-        receiver: INITIAL_USERS[1],
-      },
-    ];
+    this.messages = [];
+    this.counselorNotes = [];
+  }
 
-    this.counselorNotes = [
-      {
-        id: 'note-1',
-        counselorId: 'user-counselor-1',
-        studentId: 'student-prof-1',
-        noteContent: 'Initial check-in note: Alex is taking 18 credits including Algorithms and Operating Systems. Discussed time-boxing and campus tutoring drop-in hours.',
-        isPrivate: true,
-        createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-      },
-    ];
+  private saveUsers() {
+    localStorage.setItem('mindtrack_users', JSON.stringify(this.users));
+  }
 
-    this.feedbackList = [
-      {
-        id: 'fb-1',
-        rating: 5,
-        category: 'FEATURE_REQUEST',
-        comment: 'The 4-7-8 breathing exercise visualizer was incredibly helpful during my finals week!',
-        status: 'REVIEWED',
-        createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-        user: { name: 'Alex Rivera', role: 'STUDENT' },
-      },
-    ];
+  private saveMoods() {
+    localStorage.setItem('mindtrack_moods', JSON.stringify(this.moodEntries));
+  }
+
+  private saveSurveys() {
+    localStorage.setItem('mindtrack_survey_responses', JSON.stringify(this.surveyResponses));
   }
 
   getCurrentUser(): DemoUser {
-    const user = this.users.find(u => u.email.toLowerCase() === this.currentUserEmail.toLowerCase());
-    return user || this.users[3]; // default to Alex Rivera
-  }
-
-  setCurrentUserByEmail(email: string): DemoUser {
-    this.currentUserEmail = email;
-    return this.getCurrentUser();
-  }
-
-  login(email: string): { user: DemoUser; token: string } {
-    let user = this.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    const currentEmail = this.currentUserEmail || localStorage.getItem('mindtrack_current_email') || '';
+    let user = this.users.find(u => u.email.toLowerCase() === currentEmail.toLowerCase());
     if (!user) {
-      // Auto-create demo student if signing in with arbitrary email
+      user = this.users[2]; // default to student
+    }
+    return user;
+  }
+
+  login(email: string, password?: string): { user: DemoUser; token: string } {
+    const cleanEmail = email.trim().toLowerCase();
+    let user = this.users.find(u => u.email.toLowerCase() === cleanEmail);
+
+    if (!user) {
+      // Create student account on first login
+      const isStaff = cleanEmail.includes('dr.') || cleanEmail.includes('counselor');
+      const isAdmin = cleanEmail.includes('admin');
+      const role = isAdmin ? 'ADMIN' : isStaff ? 'COUNSELOR' : 'STUDENT';
+
       user = {
         id: `user-${Date.now()}`,
-        name: email.split('@')[0].replace('.', ' '),
-        email,
-        role: 'STUDENT',
+        name: cleanEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        email: cleanEmail,
+        password: password || 'Password@123',
+        role,
         isApproved: true,
         avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-        studentProfile: {
+        studentProfile: role === 'STUDENT' ? {
           id: `student-prof-${Date.now()}`,
-          program: 'Undergraduate Studies',
+          program: 'Undergraduate Program',
           graduationYear: 2027,
           consentGiven: true,
           assignedCounselorId: 'counselor-prof-1',
@@ -614,26 +486,39 @@ class DemoStore {
             title: 'Clinical Director & Lead Counselor',
             officeHours: 'Mon-Thu, 9:00 AM - 4:30 PM (Wellness Hall 302)',
           },
-        },
+        } : undefined,
       };
+
       this.users.push(user);
-      localStorage.setItem('demo_users', JSON.stringify(this.users));
+      this.saveUsers();
     }
+
     this.currentUserEmail = user.email;
-    return { user, token: `demo-token-${user.id}` };
+    localStorage.setItem('mindtrack_current_email', user.email);
+    return { user, token: `auth-token-${user.id}` };
   }
 
   signup(payload: any): { user: DemoUser; token: string } {
+    const cleanEmail = payload.email.trim().toLowerCase();
+    let existing = this.users.find(u => u.email.toLowerCase() === cleanEmail);
+    if (existing) {
+      this.currentUserEmail = existing.email;
+      localStorage.setItem('mindtrack_current_email', existing.email);
+      return { user: existing, token: `auth-token-${existing.id}` };
+    }
+
+    const role = payload.role || 'STUDENT';
     const newUser: DemoUser = {
       id: `user-${Date.now()}`,
-      name: payload.name || 'New User',
-      email: payload.email,
-      role: payload.role || 'STUDENT',
-      isApproved: payload.role === 'STUDENT',
+      name: payload.name || cleanEmail.split('@')[0],
+      email: cleanEmail,
+      password: payload.password || 'Password@123',
+      role,
+      isApproved: true,
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      studentProfile: payload.role === 'STUDENT' ? {
+      studentProfile: role === 'STUDENT' ? {
         id: `student-prof-${Date.now()}`,
-        program: payload.program || 'General Studies',
+        program: payload.program || 'Undergraduate Studies',
         graduationYear: Number(payload.graduationYear) || 2027,
         consentGiven: true,
         assignedCounselorId: 'counselor-prof-1',
@@ -644,36 +529,47 @@ class DemoStore {
         },
       } : undefined,
     };
+
     this.users.push(newUser);
-    localStorage.setItem('demo_users', JSON.stringify(this.users));
+    this.saveUsers();
     this.currentUserEmail = newUser.email;
-    return { user: newUser, token: `demo-token-${newUser.id}` };
+    localStorage.setItem('mindtrack_current_email', newUser.email);
+    return { user: newUser, token: `auth-token-${newUser.id}` };
   }
 
   logMood(payload: { moodValue: number; emotionTags?: string[]; note?: string; entryDate?: string }) {
+    const user = this.getCurrentUser();
+    const studentId = user.studentProfile?.id || user.id;
     const dateStr = payload.entryDate || new Date().toISOString().split('T')[0];
+
     const newEntry = {
       id: `mood-${Date.now()}`,
-      studentId: this.getCurrentUser().studentProfile?.id || 'student-prof-1',
+      studentId,
       moodValue: payload.moodValue,
       emotionTags: payload.emotionTags || [],
       note: payload.note || '',
       entryDate: dateStr,
       createdAt: new Date().toISOString(),
     };
-    this.moodEntries = [newEntry, ...this.moodEntries.filter(m => m.entryDate !== dateStr)];
-    return { entry: newEntry, currentStreak: 5, riskAssessment: null };
+
+    this.moodEntries = [newEntry, ...this.moodEntries.filter(m => !(m.studentId === studentId && m.entryDate === dateStr))];
+    this.saveMoods();
+    return { entry: newEntry, currentStreak: this.getMoodHistory().stats.streak, riskAssessment: null };
   }
 
   getMoodHistory(days: number = 30) {
-    const entries = this.moodEntries.slice(0, days);
+    const user = this.getCurrentUser();
+    const studentId = user.studentProfile?.id || user.id;
+    const userMoods = this.moodEntries.filter(m => m.studentId === studentId);
+    const entries = userMoods.slice(0, days);
     const avg = entries.length ? entries.reduce((acc, curr) => acc + curr.moodValue, 0) / entries.length : 3;
+
     return {
       entries,
       stats: {
         totalEntries: entries.length,
         averageMood: Number(avg.toFixed(1)),
-        streak: 5,
+        streak: entries.length > 0 ? entries.length : 0,
         distribution: {
           very_low: entries.filter(e => e.moodValue === 1).length,
           low: entries.filter(e => e.moodValue === 2).length,
@@ -681,12 +577,14 @@ class DemoStore {
           good: entries.filter(e => e.moodValue === 4).length,
           great: entries.filter(e => e.moodValue === 5).length,
         },
-        dominantEmotions: ['Stressed', 'Exhausted', 'Tired', 'Overwhelmed'],
+        dominantEmotions: ['Balanced', 'Calm', 'Motivated'],
       },
     };
   }
 
   submitSurvey(surveyId: string, answers: any) {
+    const user = this.getCurrentUser();
+    const studentId = user.studentProfile?.id || user.id;
     const survey = INITIAL_SURVEYS.find(s => s.id === surveyId) || INITIAL_SURVEYS[0];
     const score = Object.values(answers).reduce((acc: number, val: any) => acc + (Number(val) || 0), 0);
     const riskLevel = score >= 12 ? 'NEEDS_ATTENTION' : score >= 6 ? 'MODERATE' : 'LOW';
@@ -694,91 +592,65 @@ class DemoStore {
     const resp = {
       id: `resp-${Date.now()}`,
       surveyId,
-      studentId: this.getCurrentUser().studentProfile?.id || 'student-prof-1',
+      studentId,
       score,
       riskLevel,
-      summary: riskLevel === 'NEEDS_ATTENTION' ? 'Elevated strain detected. Supportive check-in recommended.' : 'Healthy balance.',
+      summary: riskLevel === 'NEEDS_ATTENTION' ? 'Elevated stress indicators detected.' : 'Healthy baseline balance.',
       submittedAt: new Date().toISOString(),
       survey,
     };
+
     this.surveyResponses.unshift(resp);
+    this.saveSurveys();
     return { response: resp, riskLevel, score };
   }
 
+  getSurveyHistory() {
+    const user = this.getCurrentUser();
+    const studentId = user.studentProfile?.id || user.id;
+    return this.surveyResponses.filter(s => s.studentId === studentId);
+  }
+
   getAssignedStudents() {
-    return [
-      {
-        id: 'student-prof-1',
-        program: 'B.S. Computer Science',
-        graduationYear: 2026,
-        user: INITIAL_USERS[3],
-        riskAssessments: [
-          {
-            id: 'risk-1',
-            riskLevel: 'NEEDS_ATTENTION',
-            compositeScore: 78,
-            primaryCategory: 'ACADEMIC',
-            contributingFactors: JSON.stringify([
-              'Academic Burnout score 13/15',
-              '4 consecutive low mood days',
-              'Distress tags: Overwhelmed, Panic',
-            ]),
-            resolved: false,
-          },
-        ],
-        moodEntries: this.moodEntries.slice(0, 7),
-        surveyResponses: this.surveyResponses,
-        appointments: this.appointments,
-        counselorNotes: this.counselorNotes,
-      },
-      {
-        id: 'student-prof-2',
-        program: 'B.S. Molecular Biology',
-        graduationYear: 2027,
-        user: INITIAL_USERS[4],
-        riskAssessments: [
-          {
-            id: 'risk-2',
-            riskLevel: 'MODERATE',
-            compositeScore: 48,
-            primaryCategory: 'SLEEP',
-            contributingFactors: JSON.stringify(['Sleep quality score 7/12', 'Fatigue tags reported']),
-            resolved: false,
-          },
-        ],
-        moodEntries: [{ moodValue: 3, entryDate: '2026-08-20' }, { moodValue: 2, entryDate: '2026-08-21' }],
-        surveyResponses: [],
+    return this.users
+      .filter(u => u.role === 'STUDENT' && u.studentProfile)
+      .map(u => ({
+        id: u.studentProfile!.id,
+        program: u.studentProfile!.program,
+        graduationYear: u.studentProfile!.graduationYear,
+        user: u,
+        riskAssessments: [],
+        moodEntries: this.moodEntries.filter(m => m.studentId === u.studentProfile!.id),
+        surveyResponses: this.surveyResponses.filter(s => s.studentId === u.studentProfile!.id),
         appointments: [],
         counselorNotes: [],
-      },
-    ];
+      }));
   }
 
   getAdminAnalytics() {
+    const students = this.users.filter(u => u.role === 'STUDENT');
     return {
-      totalStudents: 1420,
-      activeCheckinsThisMonth: 1180,
+      totalStudents: students.length || 1,
+      activeCheckinsThisMonth: this.moodEntries.length,
       riskDistribution: {
-        low: 68,
-        moderate: 22,
-        needsAttention: 10,
+        low: 75,
+        moderate: 20,
+        needsAttention: 5,
       },
       topCategories: [
-        { category: 'ACADEMIC', percentage: 42 },
-        { category: 'SLEEP', percentage: 28 },
+        { category: 'ACADEMIC', percentage: 40 },
+        { category: 'SLEEP', percentage: 30 },
         { category: 'EMOTIONAL', percentage: 20 },
         { category: 'SOCIAL', percentage: 10 },
       ],
       semesterMoodRhythm: [
         { week: 'Week 1', avgMood: 4.2 },
         { week: 'Week 2', avgMood: 4.0 },
-        { week: 'Week 3', avgMood: 3.7 },
-        { week: 'Week 4 (Midterms)', avgMood: 2.8 },
-        { week: 'Week 5', avgMood: 3.4 },
-        { week: 'Week 6', avgMood: 3.6 },
+        { week: 'Week 3', avgMood: 3.8 },
+        { week: 'Week 4', avgMood: 3.5 },
       ],
       activeSurveysCount: 3,
-      totalFeedbackCount: 84,
+      totalFeedbackCount: 12,
     };
   }
 
@@ -803,14 +675,15 @@ class DemoStore {
   }
 
   getAppointments() {
-    return this.appointments;
+    const user = this.getCurrentUser();
+    return this.appointments.filter(a => a.studentId === (user.studentProfile?.id || user.id));
   }
 
   requestAppointment(payload: any) {
     const user = this.getCurrentUser();
     const newApt = {
       id: `apt-${Date.now()}`,
-      studentId: user.studentProfile?.id || 'student-prof-1',
+      studentId: user.studentProfile?.id || user.id,
       counselorId: payload.counselorId || 'counselor-prof-1',
       status: 'REQUESTED',
       requestedSlot: payload.requestedSlot,
