@@ -20,11 +20,19 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
       },
     });
 
-    const contentType = res.headers.get('content-type');
-    if (res.ok && contentType && contentType.includes('application/json')) {
+    const contentType = res.headers.get('content-type') || '';
+    if (!res.ok) {
+      const body: { error?: string } = contentType.includes('application/json') ? await res.json() : {};
+      throw new Error(body.error || `Request failed (${res.status})`);
+    }
+    if (contentType.includes('application/json')) {
       return (await res.json()) as T;
     }
-  } catch (_e) {
+    throw new Error('The server returned an unexpected response');
+  } catch (error) {
+    if (error instanceof Error && !error.message.includes('Failed to fetch')) {
+      throw error;
+    }
     // Network or offline fallback
   }
 
@@ -70,31 +78,55 @@ function fallbackHandler<T>(endpoint: string, options: RequestInit): T {
   }
 
   // Surveys endpoints
-  if (endpoint === '/surveys') {
-    return { surveys: INITIAL_SURVEYS } as unknown as T;
+  if (endpoint === '/surveys' || endpoint === '/surveys/') {
+    const parsed = INITIAL_SURVEYS.map(s => ({
+      ...s,
+      questions: Array.isArray(s.questions) ? s.questions : JSON.parse(s.questions as any),
+      scoringRules: typeof s.scoringRules === 'string' ? JSON.parse(s.scoringRules as any) : s.scoringRules,
+    }));
+    return { surveys: parsed } as unknown as T;
   }
   if (endpoint.startsWith('/surveys/') && endpoint.endsWith('/submit')) {
     const surveyId = endpoint.split('/')[2];
-    return demoStore.submitSurvey(surveyId, body.answers) as unknown as T;
+    const res = demoStore.submitSurvey(surveyId, body.answers);
+    return res as unknown as T;
   }
   if (endpoint.startsWith('/surveys/') && endpoint.endsWith('/draft')) {
     return { success: true } as unknown as T;
   }
   if (endpoint.startsWith('/surveys/history')) {
-    return { history: [
-      {
-        id: 'resp-1',
-        survey: INITIAL_SURVEYS[1],
-        score: 13,
-        riskLevel: 'NEEDS_ATTENTION',
-        summary: 'Elevated academic stress indicators detected.',
-        submittedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-    ] } as unknown as T;
+    const historyList = demoStore.getSurveyHistory();
+    const history = historyList.length > 0
+      ? historyList.map(r => ({
+          id: r.id,
+          surveyTitle: r.survey?.title || 'Wellness Check-In',
+          category: r.survey?.category || 'GENERAL',
+          score: r.score,
+          riskLevel: r.riskLevel,
+          summary: r.summary,
+          submittedAt: r.submittedAt,
+        }))
+      : [
+          {
+            id: 'resp-1',
+            surveyTitle: INITIAL_SURVEYS[1].title,
+            category: INITIAL_SURVEYS[1].category,
+            score: 13,
+            riskLevel: 'NEEDS_ATTENTION',
+            summary: 'Elevated academic stress indicators detected.',
+            submittedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+          },
+        ];
+    return { history } as unknown as T;
   }
   if (endpoint.startsWith('/surveys/')) {
     const id = endpoint.replace('/surveys/', '');
-    const survey = INITIAL_SURVEYS.find(s => s.id === id || s.slug === id) || INITIAL_SURVEYS[0];
+    const found = INITIAL_SURVEYS.find(s => s.id === id || s.slug === id) || INITIAL_SURVEYS[0];
+    const survey = {
+      ...found,
+      questions: Array.isArray(found.questions) ? found.questions : JSON.parse(found.questions as any),
+      scoringRules: typeof found.scoringRules === 'string' ? JSON.parse(found.scoringRules as any) : found.scoringRules,
+    };
     return { survey } as unknown as T;
   }
 

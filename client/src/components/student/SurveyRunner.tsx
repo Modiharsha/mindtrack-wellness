@@ -25,6 +25,7 @@ export const SurveyRunner: React.FC<SurveyRunnerProps> = ({ survey, onBack, onCo
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [completionResult, setCompletionResult] = useState<{
     score: number;
     maxScore: number;
@@ -34,9 +35,31 @@ export const SurveyRunner: React.FC<SurveyRunnerProps> = ({ survey, onBack, onCo
     recommendations: Recommendation[];
   } | null>(null);
 
-  const questions: SurveyQuestion[] = survey.questions || [];
+  // Normalize questions whether provided as parsed Array or JSON string
+  const questions: SurveyQuestion[] = Array.isArray(survey.questions)
+    ? survey.questions
+    : typeof survey.questions === 'string'
+    ? (() => {
+        try {
+          return JSON.parse(survey.questions);
+        } catch {
+          return [];
+        }
+      })()
+    : [];
+
   const currentQ = questions[currentIndex];
-  const progressPercent = Math.round(((currentIndex + 1) / Math.max(1, questions.length)) * 100);
+  const progressPercent = questions.length > 0 ? Math.round(((currentIndex + 1) / questions.length) * 100) : 0;
+
+  // A direct link can replace the survey without remounting this component.
+  // Reset the in-progress response so answers from one questionnaire cannot
+  // leak into another one.
+  useEffect(() => {
+    setAnswers({});
+    setCurrentIndex(0);
+    setCompletionResult(null);
+    setErrorMessage(null);
+  }, [survey.id]);
 
   const handleSelectOption = (questionId: string, value: number) => {
     setAnswers(prev => ({ ...prev, [questionId]: value }));
@@ -55,36 +78,73 @@ export const SurveyRunner: React.FC<SurveyRunnerProps> = ({ survey, onBack, onCo
   };
 
   const handleSaveDraft = async () => {
+    setErrorMessage(null);
     try {
       await api.saveSurveyDraft(survey.id, answers);
       setDraftSaved(true);
       setTimeout(() => setDraftSaved(false), 3000);
     } catch (err) {
       console.error('Failed to save draft:', err);
+      setErrorMessage('We could not save your progress. Please check your connection and try again.');
     }
   };
 
   const handleSubmit = async () => {
+    setErrorMessage(null);
     setIsSubmitting(true);
     try {
       const res = await api.submitSurvey(survey.id, answers);
+
+      // Safe fallbacks in case of partial response
+      const calculatedMaxScore =
+        res?.maxScore ||
+        questions.reduce((acc, q) => {
+          const maxOpt = Math.max(...(q.options?.map(o => o.value) || [3]), 3);
+          return acc + maxOpt;
+        }, 0) ||
+        27;
+
+      const calcScore =
+        res?.score !== undefined
+          ? res.score
+          : Object.values(answers).reduce((acc: number, val: any) => acc + (Number(val) || 0), 0);
+
+      const calcRisk =
+        res?.riskLevel ||
+        (calcScore >= Math.round(calculatedMaxScore * 0.7)
+          ? 'NEEDS_ATTENTION'
+          : calcScore >= Math.round(calculatedMaxScore * 0.4)
+          ? 'MODERATE'
+          : 'LOW');
+
+      const calcInterpretation =
+        res?.interpretation ||
+        (calcRisk === 'NEEDS_ATTENTION'
+          ? 'Elevated stress indicators detected. We encourage you to reach out to campus counseling or use the crisis support resources.'
+          : calcRisk === 'MODERATE'
+          ? 'Mild to moderate strain detected. Consider exploring personalized coping exercises and sleep hygiene guides.'
+          : 'Healthy vitality and emotional baseline. Continue your balanced routines!');
+
       setCompletionResult({
-        score: res.score,
-        maxScore: res.maxScore,
-        riskLevel: res.riskLevel,
-        interpretation: res.interpretation,
-        contributingFactors: res.contributingFactors,
-        recommendations: res.recommendations || [],
+        score: calcScore,
+        maxScore: calculatedMaxScore,
+        riskLevel: calcRisk,
+        interpretation: calcInterpretation,
+        contributingFactors: res?.contributingFactors || [
+          `Assessment completed: ${survey.title} (${calcScore}/${calculatedMaxScore})`,
+        ],
+        recommendations: res?.recommendations || [],
       });
       onComplete();
     } catch (err) {
       console.error('Submission error:', err);
+      setErrorMessage(err instanceof Error ? err.message : 'We could not submit this assessment. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const allAnswered = questions.every(q => answers[q.id] !== undefined);
+  const allAnswered = questions.length > 0 && questions.every(q => answers[q.id] !== undefined);
 
   // If Completed, display compassionate wellness interpretation and recommendation cards
   if (completionResult) {
@@ -157,6 +217,23 @@ export const SurveyRunner: React.FC<SurveyRunnerProps> = ({ survey, onBack, onCo
     );
   }
 
+  if (questions.length === 0) {
+    return (
+      <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-slate-200/80 max-w-3xl mx-auto">
+        <h2 className="text-xl font-bold text-slate-800">Assessment temporarily unavailable</h2>
+        <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+          This questionnaire has no questions configured yet. Please return to the Wellness Hub and choose another assessment.
+        </p>
+        <button
+          onClick={onBack}
+          className="mt-6 px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors"
+        >
+          Back to assessments
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-slate-200/80 max-w-3xl mx-auto animate-fadeIn">
       {/* Header */}
@@ -213,7 +290,7 @@ export const SurveyRunner: React.FC<SurveyRunnerProps> = ({ survey, onBack, onCo
           </h3>
 
           <div className="space-y-2.5">
-            {currentQ.options.map(opt => {
+            {(currentQ.options || []).map(opt => {
               const isSelected = answers[currentQ.id] === opt.value;
               return (
                 <button
@@ -242,6 +319,11 @@ export const SurveyRunner: React.FC<SurveyRunnerProps> = ({ survey, onBack, onCo
       )}
 
       {/* Navigation Buttons */}
+      {errorMessage && (
+        <div role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800">
+          {errorMessage}
+        </div>
+      )}
       <div className="flex items-center justify-between pt-2">
         <button
           onClick={handlePrev}

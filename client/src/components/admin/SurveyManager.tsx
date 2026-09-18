@@ -142,7 +142,7 @@ export const SurveyManager: React.FC = () => {
               </div>
               <p className="text-slate-600 leading-relaxed max-w-2xl">{survey.description}</p>
               <p className="text-[11px] text-slate-400">
-                Slug: <code className="bg-slate-100 px-1.5 py-0.5 rounded">{survey.slug}</code> • Questions: {survey.questions?.length || 0} • Estimated: ~{survey.estimatedMinutes} mins
+                Slug: <code className="bg-slate-100 px-1.5 py-0.5 rounded">{survey.slug}</code> • Questions: {Array.isArray(survey.questions) ? survey.questions.length : typeof survey.questions === 'string' ? JSON.parse(survey.questions).length : 0} • Estimated: ~{survey.estimatedMinutes} mins
               </p>
             </div>
 

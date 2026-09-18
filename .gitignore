@@ -2,6 +2,9 @@ node_modules/
 .env
 server/dev.db
 server/dev.db-journal
+server/prisma/dev.db
+server/prisma/dev.db-journal
+server/dist/
 client/dist/
 *.log
 .DS_Store

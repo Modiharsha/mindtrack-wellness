@@ -8,7 +8,7 @@ export class NotificationService {
     userId: string,
     title: string,
     message: string,
-    type: 'ALERT' | 'APPOINTMENT' | 'MESSAGE' | 'SURVEY_REMINDER' | 'RESOURCE' = 'INFO',
+    type: 'INFO' | 'ALERT' | 'APPOINTMENT' | 'MESSAGE' | 'SURVEY_REMINDER' | 'RESOURCE' = 'INFO',
     linkUrl?: string
   ) {
     try {

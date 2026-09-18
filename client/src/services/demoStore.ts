@@ -88,7 +88,7 @@ export const INITIAL_SURVEYS = [
     description: 'A 9-question regular check-in adapted from standard clinical screeners to evaluate emotional balance, motivation, and vitality over the past two weeks.',
     category: 'EMOTIONAL',
     estimatedMinutes: 4,
-    questions: JSON.stringify([
+    questions: [
       {
         id: 'q1',
         text: 'Little interest or pleasure in doing things you usually enjoy',
@@ -188,9 +188,42 @@ export const INITIAL_SURVEYS = [
           { value: 3, label: 'Nearly every day' },
         ],
       },
-    ]),
-    scoringRules: JSON.stringify({
-      maxScore: 27,
+      {
+        id: 'q10',
+        text: 'Feeling connected to at least one person you can talk to when things feel difficult',
+        type: 'scale',
+        options: [
+          { value: 0, label: 'Nearly every day' },
+          { value: 1, label: 'More than half the days' },
+          { value: 2, label: 'Several days' },
+          { value: 3, label: 'Not at all' },
+        ],
+      },
+      {
+        id: 'q11',
+        text: 'Feeling able to handle everyday responsibilities at a pace that works for you',
+        type: 'scale',
+        options: [
+          { value: 0, label: 'Nearly every day' },
+          { value: 1, label: 'More than half the days' },
+          { value: 2, label: 'Several days' },
+          { value: 3, label: 'Not at all' },
+        ],
+      },
+      {
+        id: 'q12',
+        text: 'Feeling tense, on edge, or unable to relax when you want to',
+        type: 'scale',
+        options: [
+          { value: 0, label: 'Not at all' },
+          { value: 1, label: 'Several days' },
+          { value: 2, label: 'More than half the days' },
+          { value: 3, label: 'Nearly every day' },
+        ],
+      },
+    ],
+    scoringRules: {
+      maxScore: 36,
       moderateThreshold: 10,
       needsAttentionThreshold: 15,
       interpretation: {
@@ -198,7 +231,7 @@ export const INITIAL_SURVEYS = [
         moderate: 'Mild to moderate strain detected. We suggest exploring simple calming tools or talking with your advisor.',
         needsAttention: 'Elevated emotional strain indicated. We strongly recommend scheduling a warm check-in with your counselor.',
       },
-    }),
+    },
     active: true,
   },
   {
@@ -208,7 +241,7 @@ export const INITIAL_SURVEYS = [
     description: 'Assesses current semester workload tension, exam anxiety, imposter syndrome feelings, and study-life sustainability.',
     category: 'ACADEMIC',
     estimatedMinutes: 3,
-    questions: JSON.stringify([
+    questions: [
       {
         id: 'a1',
         text: 'How manageable is your current coursework and project deadlines?',
@@ -264,12 +297,17 @@ export const INITIAL_SURVEYS = [
           { value: 3, label: 'Completely paralyzed to ask for help' },
         ],
       },
-    ]),
-    scoringRules: JSON.stringify({
+    ],
+    scoringRules: {
       maxScore: 15,
       moderateThreshold: 7,
       needsAttentionThreshold: 11,
-    }),
+      interpretation: {
+        low: 'Your academic balance is sustainable. Keep prioritizing steady study habits!',
+        moderate: 'Moderate academic strain and deadline tension detected. Consider speaking with teaching assistants or using time-blocking techniques.',
+        needsAttention: 'High academic burnout risk detected. We recommend reaching out for course support and connecting with a wellness counselor.',
+      },
+    },
     active: true,
   },
   {
@@ -279,7 +317,7 @@ export const INITIAL_SURVEYS = [
     description: 'Checks sleep latency, wakeful consistency, physical energy, and screen habits before rest.',
     category: 'SLEEP',
     estimatedMinutes: 3,
-    questions: JSON.stringify([
+    questions: [
       {
         id: 's1',
         text: 'On average, how many hours of uninterrupted sleep do you get per night?',
@@ -324,12 +362,17 @@ export const INITIAL_SURVEYS = [
           { value: 3, label: 'Chronic daily physical pain / tension' },
         ],
       },
-    ]),
-    scoringRules: JSON.stringify({
+    ],
+    scoringRules: {
       maxScore: 12,
       moderateThreshold: 5,
       needsAttentionThreshold: 9,
-    }),
+      interpretation: {
+        low: 'Excellent sleep hygiene and daily physical recharge routine.',
+        moderate: 'Mild sleep latency or screen disruption detected. Try winding down 30 minutes earlier with no blue-light screens.',
+        needsAttention: 'Significant physical fatigue and sleep debt detected. Prioritizing consistent rest hours is strongly recommended.',
+      },
+    },
     active: true,
   },
 ];
@@ -585,24 +628,72 @@ class DemoStore {
   submitSurvey(surveyId: string, answers: any) {
     const user = this.getCurrentUser();
     const studentId = user.studentProfile?.id || user.id;
-    const survey = INITIAL_SURVEYS.find(s => s.id === surveyId) || INITIAL_SURVEYS[0];
-    const score = Object.values(answers).reduce((acc: number, val: any) => acc + (Number(val) || 0), 0);
-    const riskLevel = score >= 12 ? 'NEEDS_ATTENTION' : score >= 6 ? 'MODERATE' : 'LOW';
+    const survey = INITIAL_SURVEYS.find(s => s.id === surveyId || s.slug === surveyId) || INITIAL_SURVEYS[0];
+    const questions: any[] = Array.isArray(survey.questions)
+      ? survey.questions
+      : typeof survey.questions === 'string'
+      ? JSON.parse(survey.questions)
+      : [];
+
+    let score = 0;
+    let maxScore = 0;
+    questions.forEach(q => {
+      const val = Number(answers[q.id]) || 0;
+      score += val;
+      const maxOpt = Math.max(...(q.options?.map((o: any) => o.value) || [3]), 3);
+      maxScore += maxOpt;
+    });
+    if (maxScore === 0) maxScore = 27;
+
+    const scoringRules = (survey as any).scoringRules || {};
+    const moderateCutoff = scoringRules.moderateThreshold || Math.round(maxScore * 0.4);
+    const needsAttentionCutoff = scoringRules.needsAttentionThreshold || Math.round(maxScore * 0.7);
+
+    const riskLevel: 'LOW' | 'MODERATE' | 'NEEDS_ATTENTION' =
+      score >= needsAttentionCutoff ? 'NEEDS_ATTENTION' : score >= moderateCutoff ? 'MODERATE' : 'LOW';
+
+    const interpretation =
+      scoringRules.interpretation?.[
+        riskLevel === 'NEEDS_ATTENTION' ? 'needsAttention' : riskLevel === 'MODERATE' ? 'moderate' : 'low'
+      ] ||
+      (riskLevel === 'NEEDS_ATTENTION'
+        ? 'Elevated stress indicators detected. We encourage you to reach out to campus counseling or use the crisis support resources.'
+        : riskLevel === 'MODERATE'
+        ? 'Mild to moderate strain detected. Consider exploring personalized coping exercises and sleep hygiene guides.'
+        : 'Healthy vitality and emotional baseline. Continue your balanced routines!');
+
+    const contributingFactors = [
+      `Check-in completed: ${survey.title} (Score: ${score}/${maxScore})`,
+      riskLevel === 'NEEDS_ATTENTION' ? 'High strain score flagged for self-reflection' : 'Stable baseline balance',
+    ];
+
+    const matchingRecs = INITIAL_RECOMMENDATIONS.filter(
+      r => r.category === survey.category || r.category === 'GENERAL' || (riskLevel === 'NEEDS_ATTENTION' && r.category === 'CRISIS')
+    ).slice(0, 4);
 
     const resp = {
       id: `resp-${Date.now()}`,
-      surveyId,
+      surveyId: survey.id,
       studentId,
       score,
       riskLevel,
-      summary: riskLevel === 'NEEDS_ATTENTION' ? 'Elevated stress indicators detected.' : 'Healthy baseline balance.',
+      summary: interpretation,
       submittedAt: new Date().toISOString(),
       survey,
     };
 
     this.surveyResponses.unshift(resp);
     this.saveSurveys();
-    return { response: resp, riskLevel, score };
+
+    return {
+      response: resp,
+      score,
+      maxScore,
+      riskLevel,
+      interpretation,
+      contributingFactors,
+      recommendations: matchingRecs,
+    };
   }
 
   getSurveyHistory() {

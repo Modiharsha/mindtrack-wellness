@@ -24,4 +24,18 @@ describe('MindTrack API Integration Tests', () => {
 
     expect(res.status).toBe(401);
   });
+
+  it('validates public signup and never grants staff privileges', async () => {
+    const weakPassword = await request(app).post('/api/auth/signup').send({
+      name: 'Test Student', email: 'test.student@example.com', password: 'short', role: 'ADMIN',
+    });
+    expect(weakPassword.status).toBe(400);
+
+    const created = await request(app).post('/api/auth/signup').send({
+      name: 'Test Student', email: `test.${Date.now()}@example.com`, password: 'SecurePass123!', role: 'ADMIN',
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.user.role).toBe('STUDENT');
+    expect(created.body.token).toBeTruthy();
+  });
 });

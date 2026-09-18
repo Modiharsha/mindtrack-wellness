@@ -11,11 +11,10 @@ const JWT_SECRET = process.env.JWT_SECRET || 'mindtrack_super_secure_jwt_secret_
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 const signupSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-  role: z.enum(['STUDENT', 'COUNSELOR', 'ADMIN']).default('STUDENT'),
-  program: z.string().optional(),
+  name: z.string().trim().min(2, 'Name must be at least 2 characters').max(100),
+  email: z.string().trim().email('Invalid email address').max(254),
+  password: z.string().min(8, 'Password must be at least 8 characters').max(128),
+  program: z.string().trim().max(150).optional(),
   graduationYear: z.number().optional(),
   department: z.string().optional(),
   title: z.string().optional(),
@@ -28,7 +27,7 @@ const loginSchema = z.object({
 
 // Helper to generate token
 function generateToken(payload: JWTPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions);
 }
 
 /**
@@ -42,7 +41,10 @@ router.post('/signup', async (req, res: Response): Promise<void> => {
       return;
     }
 
-    const { name, email, password, role, program, graduationYear, department, title } = parseResult.data;
+    const { name, email, password, program, graduationYear } = parseResult.data;
+    // Public registration is deliberately student-only. Staff and administrators
+    // must be provisioned by an administrator, preventing privilege escalation.
+    const role = 'STUDENT';
 
     // Check if user exists
     const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
@@ -79,16 +81,6 @@ router.post('/signup', async (req, res: Response): Promise<void> => {
                   graduationYear: graduationYear || 2027,
                   assignedCounselorId: assignedCounselorId,
                   consentGiven: false,
-                },
-              }
-            : undefined,
-        counselorProfile:
-          role === 'COUNSELOR'
-            ? {
-                create: {
-                  department: department || 'Student Counseling Center',
-                  title: title || 'Licensed Counselor',
-                  officeHours: 'Mon-Fri, 9am - 4pm',
                 },
               }
             : undefined,
@@ -155,6 +147,11 @@ router.post('/login', async (req, res: Response): Promise<void> => {
     const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) {
       res.status(401).json({ error: 'Invalid email or password' });
+      return;
+    }
+
+    if (!user.isApproved && user.role !== 'STUDENT') {
+      res.status(403).json({ error: 'This staff account is pending administrative approval' });
       return;
     }
 

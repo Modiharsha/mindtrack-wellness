@@ -113,7 +113,7 @@ router.get('/', authenticateJWT, async (req: AuthenticatedRequest, res: Response
   try {
     const { role, studentProfileId, counselorProfileId } = req.user!;
 
-    let appointments;
+    let appointments: unknown[];
 
     if (role === 'STUDENT' && studentProfileId) {
       appointments = await prisma.appointment.findMany({

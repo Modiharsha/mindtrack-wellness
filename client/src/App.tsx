@@ -98,6 +98,14 @@ function AppContent() {
             }
           />
           <Route
+            path="/student/surveys/:surveyId"
+            element={
+              <ProtectedRoute allowedRoles={['STUDENT']}>
+                <StudentDashboard onOpenCrisis={() => setIsCrisisModalOpen(true)} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/student/counselor"
             element={
               <ProtectedRoute allowedRoles={['STUDENT']}>

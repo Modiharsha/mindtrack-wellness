@@ -1,16 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Heart, Lock, Mail, User, AlertCircle, BookOpen, GraduationCap } from 'lucide-react';
+import { Heart, Lock, Mail, User, AlertCircle, GraduationCap } from 'lucide-react';
 
 export const AuthPage: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<'STUDENT' | 'COUNSELOR' | 'ADMIN'>('STUDENT');
   const [program, setProgram] = useState('B.S. Computer Science');
-  const [department, setDepartment] = useState('Student Counseling Center');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,21 +21,17 @@ export const AuthPage: React.FC = () => {
     setLoading(true);
 
     try {
-      if (isLogin) {
-        await login(email.trim(), password.trim() || 'Password@123');
-      } else {
-        await signup({
-          name: name.trim() || email.split('@')[0],
-          email: email.trim(),
-          password: password.trim() || 'Password@123',
-          role,
-          program: role === 'STUDENT' ? program : undefined,
-          department: role !== 'STUDENT' ? department : undefined,
-        });
-      }
+      const authenticatedUser = isLogin
+        ? await login(email.trim(), password)
+        : await signup({
+            name: name.trim(),
+            email: email.trim(),
+            password,
+            program,
+          });
 
-      if (role === 'ADMIN' || email.toLowerCase().includes('admin')) navigate('/admin');
-      else if (role === 'COUNSELOR' || email.toLowerCase().includes('dr.') || email.toLowerCase().includes('counselor')) navigate('/counselor');
+      if (authenticatedUser.role === 'ADMIN') navigate('/admin');
+      else if (authenticatedUser.role === 'COUNSELOR') navigate('/counselor');
       else navigate('/student');
     } catch (err: any) {
       setError(err.message || 'Authentication failed. Please check your email and password.');
@@ -117,20 +111,6 @@ export const AuthPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Account Role</label>
-                <select
-                  value={role}
-                  onChange={e => setRole(e.target.value as any)}
-                  className="w-full p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none bg-white font-semibold"
-                >
-                  <option value="STUDENT">Student</option>
-                  <option value="COUNSELOR">Counselor / Staff</option>
-                  <option value="ADMIN">Institutional Administrator</option>
-                </select>
-              </div>
-
-              {role === 'STUDENT' ? (
-                <div>
                   <label className="block font-semibold text-slate-700 mb-1">Academic Program / Major</label>
                   <div className="relative">
                     <GraduationCap className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -142,28 +122,13 @@ export const AuthPage: React.FC = () => {
                       className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 outline-none font-medium"
                     />
                   </div>
-                </div>
-              ) : (
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Department</label>
-                  <div className="relative">
-                    <BookOpen className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={department}
-                      onChange={e => setDepartment(e.target.value)}
-                      placeholder="e.g. Student Wellness Counseling"
-                      className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 outline-none font-medium"
-                    />
-                  </div>
-                </div>
-              )}
+              </div>
             </>
           )}
 
           <div>
             <label className="block font-semibold text-slate-700 mb-1">
-              {role === 'STUDENT' ? 'Student Email' : 'Email Address'}
+              Student Email
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />

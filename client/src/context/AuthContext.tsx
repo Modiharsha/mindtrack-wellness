@@ -6,8 +6,8 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (payload: any) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
+  signup: (payload: any) => Promise<User>;
   logout: () => void;
   switchUserRoleForDemo: (role: UserRole, emailOverride?: string) => Promise<void>;
   submitConsent: () => Promise<void>;
@@ -49,6 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('mindtrack_token', data.token);
     setToken(data.token);
     setUser(data.user);
+    return data.user;
   };
 
   const signup = async (payload: any) => {
@@ -56,6 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('mindtrack_token', data.token);
     setToken(data.token);
     setUser(data.user);
+    return data.user;
   };
 
   const logout = () => {

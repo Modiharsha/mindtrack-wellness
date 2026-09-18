@@ -17,8 +17,11 @@ import {
   ShieldAlert,
   Smile,
   Activity,
+  Link as LinkIcon,
+  Check,
+  Share2,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useSearchParams, useParams, useNavigate } from 'react-router-dom';
 
 interface StudentDashboardProps {
   onOpenCrisis: () => void;
@@ -26,12 +29,18 @@ interface StudentDashboardProps {
 
 export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onOpenCrisis }) => {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { surveyId } = useParams<{ surveyId?: string }>();
+
   const [moodEntries, setMoodEntries] = useState<MoodEntry[]>([]);
   const [moodStats, setMoodStats] = useState<MoodStats | null>(null);
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [surveyHistory, setSurveyHistory] = useState<SurveyHistoryItem[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
+  const [copiedSurveyId, setCopiedSurveyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Latest computed risk
@@ -47,7 +56,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onOpenCrisis
 
       // 2. Active surveys
       const surveyRes = await api.getSurveys();
-      setSurveys(surveyRes.surveys || []);
+      const loadedSurveys = surveyRes.surveys || [];
+      setSurveys(loadedSurveys);
 
       // 3. Survey history
       const histRes = await api.getSurveyHistory();
@@ -62,6 +72,15 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onOpenCrisis
       if (recRes.riskLevel) {
         setStudentRiskLevel(recRes.riskLevel as RiskLevel);
       }
+
+      // Check URL parameters for direct survey auto-open
+      const requestedId = surveyId || searchParams.get('survey') || searchParams.get('id');
+      if (requestedId && loadedSurveys.length > 0) {
+        const matching = loadedSurveys.find((s: Survey) => s.id === requestedId || s.slug === requestedId);
+        if (matching) {
+          setActiveSurvey(matching);
+        }
+      }
     } catch (err) {
       console.error('Failed to load student dashboard:', err);
     } finally {
@@ -73,12 +92,50 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onOpenCrisis
     loadStudentData();
   }, []);
 
+  // Handle deep-link scrolling or direct survey route changes
+  useEffect(() => {
+    const requestedId = surveyId || searchParams.get('survey') || searchParams.get('id');
+    if (requestedId && surveys.length > 0) {
+      const matching = surveys.find(s => s.id === requestedId || s.slug === requestedId);
+      if (matching && activeSurvey?.id !== matching.id) {
+        setActiveSurvey(matching);
+      }
+    } else if (!requestedId && location.pathname.includes('/surveys') && !activeSurvey) {
+      const surveysElement = document.getElementById('periodic-checkins');
+      if (surveysElement) {
+        surveysElement.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  }, [location.pathname, searchParams, surveyId, surveys]);
+
+  const handleCopySurveyLink = (surveyItem: Survey, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const origin = window.location.origin;
+    const directUrl = `${origin}/student/surveys?survey=${surveyItem.slug || surveyItem.id}`;
+    navigator.clipboard.writeText(directUrl).then(() => {
+      setCopiedSurveyId(surveyItem.id);
+      setTimeout(() => setCopiedSurveyId(null), 3000);
+    });
+  };
+
+  const handleStartSurvey = (surveyItem: Survey) => {
+    setActiveSurvey(surveyItem);
+    // Keep the selected assessment in the path so the runner survives a refresh
+    // and shared links always open the correct questionnaire.
+    navigate(`/student/surveys/${encodeURIComponent(surveyItem.slug || surveyItem.id)}`);
+  };
+
+  const handleCloseSurvey = () => {
+    setActiveSurvey(null);
+    navigate('/student/surveys');
+  };
+
   if (activeSurvey) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-8">
         <SurveyRunner
           survey={activeSurvey}
-          onBack={() => setActiveSurvey(null)}
+          onBack={handleCloseSurvey}
           onComplete={() => {
             loadStudentData();
           }}
@@ -167,8 +224,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onOpenCrisis
       </div>
 
       {/* Wellness Surveys Row */}
-      <div className="bg-white rounded-3xl p-6 md:p-7 shadow-sm border border-slate-200/80">
-        <div className="flex items-center justify-between mb-5">
+      <div id="periodic-checkins" className="bg-white rounded-3xl p-6 md:p-7 shadow-sm border border-slate-200/80 scroll-mt-20">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
           <div>
             <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
               Validated Self-Assessments
@@ -178,33 +235,62 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onOpenCrisis
               Structured questionnaires to help you reflect on academic load, sleep habits, and vitality.
             </p>
           </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-3 py-1 rounded-xl">
+              {surveys.length} Assessments Available
+            </span>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {surveys.map(s => (
-            <div
-              key={s.id}
-              className="p-5 rounded-2xl border border-slate-200/80 bg-slate-50/50 hover:bg-white hover:border-emerald-300 hover:shadow-md transition-all flex flex-col justify-between"
-            >
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded-full">
-                  {s.category}
-                </span>
-                <h4 className="font-bold text-sm text-slate-800 mt-2">{s.title}</h4>
-                <p className="text-xs text-slate-600 mt-1 line-clamp-3 leading-relaxed">{s.description}</p>
-              </div>
+          {surveys.map(s => {
+            const isCopied = copiedSurveyId === s.id;
+            return (
+              <div
+                key={s.id}
+                className="p-5 rounded-2xl border border-slate-200/80 bg-slate-50/50 hover:bg-white hover:border-emerald-300 hover:shadow-md transition-all flex flex-col justify-between group"
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded-full">
+                      {s.category}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => handleCopySurveyLink(s, e)}
+                      title="Copy Direct Sharable Link for this Assessment"
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-emerald-700 bg-white hover:bg-emerald-50 border border-slate-200 px-2 py-1 rounded-lg transition-all shadow-2xs"
+                    >
+                      {isCopied ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-600" />
+                          <span className="text-emerald-700 font-bold text-[10px]">Link Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <LinkIcon className="w-3 h-3" />
+                          <span className="text-[10px]">Copy Link</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <h4 className="font-bold text-sm text-slate-800 mt-2">{s.title}</h4>
+                  <p className="text-xs text-slate-600 mt-1 line-clamp-3 leading-relaxed">{s.description}</p>
+                </div>
 
-              <div className="mt-5 pt-3 border-t border-slate-200/60 flex items-center justify-between">
-                <span className="text-[11px] text-slate-400 font-medium">~{s.estimatedMinutes} mins</span>
-                <button
-                  onClick={() => setActiveSurvey(s)}
-                  className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 transition-colors"
-                >
-                  Start Assessment <ArrowRight className="w-3.5 h-3.5" />
-                </button>
+                <div className="mt-5 pt-3 border-t border-slate-200/60 flex items-center justify-between">
+                  <span className="text-[11px] text-slate-400 font-medium">~{s.estimatedMinutes} mins</span>
+                  <button
+                    onClick={() => handleStartSurvey(s)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs group-hover:scale-102"
+                  >
+                    Start Assessment <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

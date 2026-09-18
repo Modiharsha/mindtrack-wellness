@@ -128,6 +128,20 @@ router.post(
       const questions = JSON.parse(survey.questions) as SurveyQuestion[];
       const scoringRules = survey.scoringRules ? JSON.parse(survey.scoringRules) : null;
 
+      if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+        res.status(400).json({ error: 'Answers must be an object keyed by question ID' });
+        return;
+      }
+
+      const invalidQuestion = questions.find(question => {
+        const value = answers[question.id];
+        return !Number.isInteger(value) || !question.options.some(option => option.value === value);
+      });
+      if (invalidQuestion) {
+        res.status(400).json({ error: 'Please answer every question using one of the available options' });
+        return;
+      }
+
       // Calculate total score based on questions
       let calculatedScore = 0;
       let maxScore = 0;

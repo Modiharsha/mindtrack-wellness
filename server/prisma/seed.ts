@@ -190,9 +190,42 @@ async function main() {
             { value: 3, label: 'Nearly every day' },
           ],
         },
+        {
+          id: 'q10',
+          text: 'Feeling connected to at least one person you can talk to when things feel difficult',
+          type: 'scale',
+          options: [
+            { value: 0, label: 'Nearly every day' },
+            { value: 1, label: 'More than half the days' },
+            { value: 2, label: 'Several days' },
+            { value: 3, label: 'Not at all' },
+          ],
+        },
+        {
+          id: 'q11',
+          text: 'Feeling able to handle everyday responsibilities at a pace that works for you',
+          type: 'scale',
+          options: [
+            { value: 0, label: 'Nearly every day' },
+            { value: 1, label: 'More than half the days' },
+            { value: 2, label: 'Several days' },
+            { value: 3, label: 'Not at all' },
+          ],
+        },
+        {
+          id: 'q12',
+          text: 'Feeling tense, on edge, or unable to relax when you want to',
+          type: 'scale',
+          options: [
+            { value: 0, label: 'Not at all' },
+            { value: 1, label: 'Several days' },
+            { value: 2, label: 'More than half the days' },
+            { value: 3, label: 'Nearly every day' },
+          ],
+        },
       ]),
       scoringRules: JSON.stringify({
-        maxScore: 27,
+        maxScore: 36,
         moderateThreshold: 10,
         needsAttentionThreshold: 15,
         interpretation: {
